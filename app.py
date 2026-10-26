@@ -9,9 +9,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
 
-# ==========================================
+# ==================================================
 # 1. KONFIGURASI APLIKASI
-# ==========================================
+# ==================================================
 
 st.set_page_config(
     page_title="Klasifikasi Bunga Iris",
@@ -20,119 +20,139 @@ st.set_page_config(
 )
 
 
-# ==========================================
-# 2. MEMUAT DATASET IRIS
-# ==========================================
+# ==================================================
+# 2. MEMUAT DATASET DAN MELATIH MODEL
+# ==================================================
 
-iris = load_iris()
+@st.cache_resource
+def siapkan_model():
+    iris = load_iris()
 
-X = pd.DataFrame(
-    iris.data,
-    columns=iris.feature_names
-)
+    X = pd.DataFrame(
+        iris.data,
+        columns=iris.feature_names
+    )
 
-y = iris.target
+    y = iris.target
+    nama_bunga = list(iris.target_names)
 
-nama_bunga = iris.target_names
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
 
-df = X.copy()
+    model = RandomForestClassifier(
+        n_estimators=100,
+        random_state=42
+    )
 
-df["species"] = [
-    nama_bunga[i] for i in y
-]
+    model.fit(X_train, y_train)
 
+    y_pred = model.predict(X_test)
 
-# ==========================================
-# 3. MEMBAGI DATA TRAINING DAN TESTING
-# ==========================================
+    akurasi = accuracy_score(y_test, y_pred)
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
+    report = classification_report(
+        y_test,
+        y_pred,
+        target_names=nama_bunga,
+        output_dict=True,
+        zero_division=0
+    )
 
+    df = X.copy()
+    df["species"] = [nama_bunga[i] for i in y]
 
-# ==========================================
-# 4. MEMBUAT MODEL MACHINE LEARNING
-# ==========================================
-
-model = RandomForestClassifier(
-    n_estimators=100,
-    random_state=42
-)
-
-model.fit(X_train, y_train)
-
-
-# ==========================================
-# 5. EVALUASI MODEL
-# ==========================================
-
-y_pred = model.predict(X_test)
-
-akurasi = accuracy_score(
-    y_test,
-    y_pred
-)
+    return (
+        iris,
+        df,
+        model,
+        nama_bunga,
+        akurasi,
+        X_test,
+        y_test,
+        y_pred,
+        report
+    )
 
 
-# ==========================================
-# 6. JUDUL APLIKASI
-# ==========================================
+# ==================================================
+# 3. MEMUAT MODEL DENGAN PENANGANAN ERROR
+# ==================================================
+
+try:
+    (
+        iris,
+        df,
+        model,
+        nama_bunga,
+        akurasi,
+        X_test,
+        y_test,
+        y_pred,
+        report
+    ) = siapkan_model()
+
+except Exception as error:
+    st.error("Aplikasi gagal memuat dataset atau model.")
+    st.exception(error)
+    st.stop()
+
+
+# ==================================================
+# 4. JUDUL APLIKASI
+# ==================================================
 
 st.title("🌸 Aplikasi Klasifikasi Bunga Iris")
 
 st.write(
     """
-    Aplikasi Machine Learning untuk mengklasifikasikan
-    jenis bunga Iris berdasarkan ukuran sepal dan petal.
+    Aplikasi Machine Learning untuk memprediksi jenis bunga
+    Iris berdasarkan panjang dan lebar sepal serta petal.
     """
 )
 
 st.divider()
 
 
-# ==========================================
-# 7. INFORMASI MODEL
-# ==========================================
+# ==================================================
+# 5. RINGKASAN DATASET DAN MODEL
+# ==================================================
+
+st.subheader("📌 Ringkasan Dataset dan Model")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric(
-        "Jumlah Dataset",
-        len(df)
-    )
+    st.write("**Jumlah Dataset**")
+    st.title("150")
+    st.caption("Data bunga Iris")
 
 with col2:
-    st.metric(
-        "Jumlah Jenis Bunga",
-        len(nama_bunga)
-    )
+    st.write("**Jumlah Jenis Bunga**")
+    st.title("3")
+    st.caption("Setosa, Versicolor, Virginica")
 
 with col3:
-    st.metric(
-        "Akurasi Model",
-        f"{akurasi * 100:.2f}%"
-    )
-
+    st.write("**Akurasi Model**")
+    st.title(f"{akurasi * 100:.2f}%")
+    st.caption("Pengujian pada data testing")
 
 st.divider()
 
 
-# ==========================================
-# 8. SIDEBAR INPUT
-# ==========================================
+# ==================================================
+# 6. INPUT KARAKTERISTIK BUNGA
+# ==================================================
 
 st.sidebar.header("🌱 Input Karakteristik Bunga")
 
 st.sidebar.write(
-    "Masukkan ukuran bunga untuk melakukan klasifikasi."
+    "Atur nilai berikut untuk memprediksi jenis bunga."
 )
-
 
 sepal_length = st.sidebar.slider(
     "Sepal Length (cm)",
@@ -167,9 +187,9 @@ petal_width = st.sidebar.slider(
 )
 
 
-# ==========================================
-# 9. DATA INPUT PREDIKSI
-# ==========================================
+# ==================================================
+# 7. MELAKUKAN PREDIKSI
+# ==================================================
 
 data_input = pd.DataFrame(
     [[
@@ -181,60 +201,62 @@ data_input = pd.DataFrame(
     columns=iris.feature_names
 )
 
+try:
+    prediksi = int(model.predict(data_input)[0])
 
-# ==========================================
-# 10. MELAKUKAN PREDIKSI
-# ==========================================
+    probabilitas = model.predict_proba(data_input)[0]
 
-prediksi = model.predict(data_input)
+    hasil_bunga = nama_bunga[prediksi]
 
-probabilitas = model.predict_proba(
-    data_input
-)
-
-hasil_bunga = nama_bunga[prediksi[0]]
+except Exception as error:
+    st.error("Prediksi gagal dilakukan.")
+    st.exception(error)
+    st.stop()
 
 
-# ==========================================
-# 11. MENAMPILKAN HASIL
-# ==========================================
+# ==================================================
+# 8. MENAMPILKAN HASIL KLASIFIKASI
+# ==================================================
 
 st.subheader("🔍 Hasil Klasifikasi")
 
 col1, col2 = st.columns(2)
 
 with col1:
-
     st.success(
-        f"Jenis bunga diprediksi: {hasil_bunga.upper()}"
+        f"Jenis bunga yang diprediksi: {hasil_bunga.upper()}"
     )
 
-    st.write(
-        "Karakteristik bunga yang dimasukkan:"
-    )
+    st.write("**Data karakteristik bunga**")
 
     st.dataframe(
         data_input,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
 with col2:
-
-    st.write("Probabilitas setiap jenis bunga:")
+    st.write("**Probabilitas setiap jenis bunga**")
 
     probabilitas_df = pd.DataFrame({
         "Jenis Bunga": nama_bunga,
-        "Probabilitas": probabilitas[0]
+        "Probabilitas (%)": probabilitas * 100
     })
 
     st.bar_chart(
-        probabilitas_df.set_index("Jenis Bunga")
+        probabilitas_df.set_index("Jenis Bunga"),
+        y="Probabilitas (%)"
+    )
+
+    st.caption(
+        "Probabilitas merupakan estimasi dari model Random Forest, "
+        "bukan jaminan kepastian jenis bunga."
     )
 
 
-# ==========================================
-# 12. VISUALISASI DATASET
-# ==========================================
+# ==================================================
+# 9. VISUALISASI DATASET
+# ==================================================
 
 st.divider()
 
@@ -243,83 +265,81 @@ st.subheader("📊 Visualisasi Dataset Bunga Iris")
 fig, ax = plt.subplots(figsize=(8, 5))
 
 for jenis in nama_bunga:
-
-    data_jenis = df[
-        df["species"] == jenis
-    ]
+    data_jenis = df[df["species"] == jenis]
 
     ax.scatter(
         data_jenis["petal length (cm)"],
         data_jenis["petal width (cm)"],
-        label=jenis
+        label=jenis,
+        alpha=0.75
     )
 
-ax.set_xlabel("Petal Length (cm)")
-ax.set_ylabel("Petal Width (cm)")
+ax.set_xlabel("Panjang Petal (cm)")
+ax.set_ylabel("Lebar Petal (cm)")
+ax.set_title("Hubungan Panjang dan Lebar Petal")
+ax.legend(title="Jenis Bunga")
+ax.grid(True, alpha=0.2)
 
-ax.set_title(
-    "Hubungan Panjang dan Lebar Petal"
-)
-
-ax.legend()
-
+fig.tight_layout()
 st.pyplot(fig)
+plt.close(fig)
 
 
-# ==========================================
-# 13. MENAMPILKAN DATASET
-# ==========================================
+# ==================================================
+# 10. MENAMPILKAN DATASET
+# ==================================================
 
 with st.expander("📋 Lihat Dataset Bunga Iris"):
-
     st.dataframe(
         df,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
+    st.write("**Jumlah data setiap jenis bunga**")
 
-# ==========================================
-# 14. INFORMASI MODEL
-# ==========================================
-
-with st.expander("🤖 Informasi Model Machine Learning"):
-
-    st.write(
-        """
-        Model yang digunakan adalah Random Forest Classifier.
-
-        Dataset dibagi menjadi:
-        - 80% data training
-        - 20% data testing
-
-        Model menggunakan 100 decision trees.
-
-        Evaluasi model menggunakan accuracy score.
-        """
-    )
-
-    st.write("Classification Report:")
-
-    report = classification_report(
-        y_test,
-        y_pred,
-        target_names=nama_bunga,
-        output_dict=True
+    jumlah_bunga = (
+        df["species"]
+        .value_counts()
+        .rename_axis("Jenis Bunga")
+        .reset_index(name="Jumlah")
     )
 
     st.dataframe(
-        pd.DataFrame(report).transpose(),
+        jumlah_bunga,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# ==================================================
+# 11. INFORMASI DAN EVALUASI MODEL
+# ==================================================
+
+with st.expander("🤖 Informasi Model Machine Learning"):
+    st.write("**Algoritma:** Random Forest Classifier")
+    st.write("**Jumlah decision trees:** 100")
+    st.write("**Data training:** 80%")
+    st.write("**Data testing:** 20%")
+    st.write("**Random state:** 42")
+
+    st.write("**Classification Report**")
+
+    report_df = pd.DataFrame(report).transpose()
+
+    st.dataframe(
+        report_df.round(3),
         use_container_width=True
     )
 
 
-# ==========================================
-# 15. FOOTER
-# ==========================================
+# ==================================================
+# 12. FOOTER
+# ==================================================
 
 st.divider()
 
 st.caption(
     "Aplikasi Klasifikasi Bunga Iris | "
-    "Python + Streamlit + Scikit-learn"
+    "Python | Streamlit | Scikit-learn"
 )
